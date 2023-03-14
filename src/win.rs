@@ -3,7 +3,9 @@ use winapi::um::accctrl::*;
 use winapi::um::aclapi::*;
 use winapi::um::minwinbase::{LPTR, PSECURITY_ATTRIBUTES, SECURITY_ATTRIBUTES};
 use winapi::um::securitybaseapi::*;
-use winapi::um::winbase::{LocalAlloc, LocalFree, GetNamedPipeClientProcessId, GetNamedPipeServerProcessId};
+use winapi::um::winbase::{
+    GetNamedPipeClientProcessId, GetNamedPipeServerProcessId, LocalAlloc, LocalFree,
+};
 use winapi::um::winnt::*;
 
 use futures::Stream;
@@ -19,6 +21,8 @@ use std::time::{Duration, Instant};
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use tokio::net::windows::named_pipe;
+
+use crate::ConnectionPeer;
 
 enum NamedPipe {
     Server(named_pipe::NamedPipeServer),
@@ -38,7 +42,9 @@ impl Endpoint {
     /// Stream of incoming connections
     pub fn incoming(
         mut self,
-    ) -> io::Result<impl Stream<Item = io::Result<impl AsyncRead + AsyncWrite>> + 'static> {
+    ) -> io::Result<
+        impl Stream<Item = io::Result<impl AsyncRead + AsyncWrite + ConnectionPeer>> + 'static,
+    > {
         let pipe = self.create_listener()?;
 
         let stream =
@@ -142,11 +148,11 @@ impl Connection {
             NamedPipe::Server(server) => {
                 let handle = server.as_raw_handle();
                 unsafe { GetNamedPipeClientProcessId(handle.cast(), &mut pid) }
-            },
+            }
             NamedPipe::Client(client) => {
                 let handle = client.as_raw_handle();
                 unsafe { GetNamedPipeServerProcessId(handle.cast(), &mut pid) }
-            },
+            }
         };
         if ret == 0 {
             return Err(io::Error::last_os_error());

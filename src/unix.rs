@@ -8,6 +8,8 @@ use std::task::{Context, Poll};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::net::{UnixListener, UnixStream};
 
+use crate::ConnectionPeer;
+
 /// Socket permissions and ownership on UNIX
 pub struct SecurityAttributes {
     // read/write permissions for owner, group and others in unix octal.
@@ -65,8 +67,9 @@ impl Endpoint {
     /// Stream of incoming connections
     pub fn incoming(
         self,
-    ) -> io::Result<impl Stream<Item = std::io::Result<impl AsyncRead + AsyncWrite>> + 'static>
-    {
+    ) -> io::Result<
+        impl Stream<Item = std::io::Result<impl AsyncRead + AsyncWrite + ConnectionPeer>> + 'static,
+    > {
         let listener = self.inner()?;
         // the call to bind in `inner()` creates the file
         // `apply_permission()` will set the file permissions.
@@ -114,6 +117,16 @@ struct Incoming {
     listener: UnixListener,
 }
 
+impl ConnectionPeer for UnixStream {
+    fn peer_pid(&self) -> io::Result<u32> {
+        Ok(self
+            .peer_cred()?
+            .pid()
+            .ok_or_else(|| Error::new(io::ErrorKind::Unsupported, "Not implemented"))?
+            as u32)
+    }
+}
+
 impl Stream for Incoming {
     type Item = io::Result<UnixStream>;
 
@@ -144,10 +157,10 @@ impl Connection {
     fn wrap(stream: UnixStream) -> Self {
         Self { inner: stream }
     }
+}
 
-    /// Attempts to retrieve the pid of the procress connected
-    /// to the other end of the socket
-    pub fn peer_pid(&self) -> io::Result<u32> {
+impl ConnectionPeer for Connection {
+    fn peer_pid(&self) -> io::Result<u32> {
         Ok(self
             .inner
             .peer_cred()?
