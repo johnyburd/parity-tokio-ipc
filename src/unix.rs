@@ -146,15 +146,14 @@ impl Connection {
     }
 
     /// Attempts to retrieve the pid of the procress connected
-    /// to the other end of the pipe
-    pub fn peer_pid(&self) -> Option<i32> {
-        match self.inner.peer_cred() {
-            Err(e) => {
-                log::debug!("Unable to read peer pid: {e}");
-                None
-            }
-            Ok(cred) => cred.pid(),
-        }
+    /// to the other end of the socket
+    pub fn peer_pid(&self) -> io::Result<u32> {
+        Ok(self
+            .inner
+            .peer_cred()?
+            .pid()
+            .ok_or_else(|| Error::new(io::ErrorKind::Unsupported, "Not implemented"))?
+            as u32)
     }
 }
 
