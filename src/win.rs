@@ -3,13 +3,14 @@ use winapi::um::accctrl::*;
 use winapi::um::aclapi::*;
 use winapi::um::minwinbase::{LPTR, PSECURITY_ATTRIBUTES, SECURITY_ATTRIBUTES};
 use winapi::um::securitybaseapi::*;
-use winapi::um::winbase::{LocalAlloc, LocalFree};
+use winapi::um::winbase::{LocalAlloc, LocalFree, GetNamedPipeClientProcessId, GetNamedPipeServerProcessId};
 use winapi::um::winnt::*;
 
 use futures::Stream;
 use std::io;
 use std::marker;
 use std::mem;
+use std::os::windows::prelude::AsRawHandle;
 use std::path::Path;
 use std::pin::Pin;
 use std::ptr;
@@ -131,6 +132,26 @@ impl Connection {
     /// Wraps an existing named pipe
     fn wrap(pipe: NamedPipe) -> Self {
         Self { inner: pipe }
+    }
+
+    /// Attempts to retrieve the pid of the procress connected
+    /// to the other end of the pipe
+    pub fn peer_pid(&self) -> io::Result<u32> {
+        let mut pid = 0;
+        let ret = match &self.inner {
+            NamedPipe::Server(server) => {
+                let handle = server.as_raw_handle();
+                unsafe { GetNamedPipeClientProcessId(handle.cast(), &mut pid) }
+            },
+            NamedPipe::Client(client) => {
+                let handle = client.as_raw_handle();
+                unsafe { GetNamedPipeServerProcessId(handle.cast(), &mut pid) }
+            },
+        };
+        if ret == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(pid)
     }
 }
 
