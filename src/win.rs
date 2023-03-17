@@ -139,10 +139,12 @@ impl Connection {
     fn wrap(pipe: NamedPipe) -> Self {
         Self { inner: pipe }
     }
+}
 
+impl ConnectionPeer for Connection {
     /// Attempts to retrieve the pid of the procress connected
     /// to the other end of the pipe
-    pub fn peer_pid(&self) -> io::Result<u32> {
+    fn peer_pid(&self) -> io::Result<u32> {
         let mut pid = 0;
         let ret = match &self.inner {
             NamedPipe::Server(server) => {
